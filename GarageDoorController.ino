@@ -2,11 +2,22 @@
 
 #include "HTTPRequest.h"
 
-//ToDo: move to a configuration file
+#include "Config.h" // Configuration file for WiFi, server, and access token
+
 #define ACCESS_TOKEN  "TOKEN"
 
 //ToDo: initialize all components (WiFi, Serial, etc)
 void setup() {
+  Serial.begin(9600);
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, LOW); // Ensure relay is off
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
   
 }
 
@@ -18,7 +29,10 @@ typedef enum { NO_ACTION, INVALID_RESPONSE, INVALID_REQUEST, REQUEST_FAILED, ACT
  * 
  */
 int executeCommandOnDoor(const char * status){
-  //ToDo: complete with actual execution ("press the button") - Will use the relay shield from Adafruit
+  Serial.println("Activating relay to open/close the door...");
+  digitalWrite(RELAY_PIN, HIGH); // Activate relay
+  delay(1000); // Simulate button press duration
+  digitalWrite(RELAY_PIN, LOW); // Deactivate relay
   return ACTIVATED;
 }
 
@@ -26,22 +40,24 @@ int executeCommandOnDoor(const char * status){
  * This function notifies the backend of the completion of a action
  */
 int sendCommandCompletion(int sensorOpen, int sensorClose){
-
-  if(sensorOpen && sensorClose){  //Should never happen
+  if (sensorOpen && sensorClose) {
     return INVALID_REQUEST;
   }
-  
+
   HTTPRequest req;
-  sprintf(req.dataBuffer(), "{\"status\":\"%s\"}", sensorOpen ? "open_complete" : ( sensorClose ? "close_complete" : "in_progress"));
+  StaticJsonDocument<200> doc;
+  doc["status"] = sensorOpen ? "open_complete" : (sensorClose ? "close_complete" : "in_progress");
 
-  //ToDo: change URL and PATH move to config
-  auto res = req.postJSON("https://herokuapp.com", "/api/door", 443, ACCESS_TOKEN, NULL);
+  char jsonBuffer[512];
+  serializeJson(doc, jsonBuffer);
 
-  if(!res){
+  auto res = req.postJSON(SERVER_URL, "/api/door", 443, ACCESS_TOKEN, jsonBuffer);
+
+  if (!res) {
     return INVALID_RESPONSE;
   }
 
-  if(res->statusCode == 200){
+  if (res->statusCode == 200) {
     return COMPLETED;
   }
 
@@ -49,16 +65,15 @@ int sendCommandCompletion(int sensorOpen, int sensorClose){
 }
 
 int checkCommandComplete(){
-  //ToDo: check sensors to be signaling completion
-  //we will have 2 sensors detecting when the door is closed and open
-  // Open=true  Closed=False -> Open
-  // Open=false Closed=False -> Door is moving (in between open and closed)
-  // Open=false Closed=true  -> Closed
-  // Open=true  Closed=true  -> Should never happen
-  // When either sensor is true, we send an event to the backend to signal "completion"
-  //sendCommandCompletion(sensorOpen, sensorClose);
-  return COMPLETED;
+  int sensorOpen = digitalRead(SENSOR_OPEN_PIN);
+  int sensorClose = digitalRead(SENSOR_CLOSE_PIN);
+
+  if (sensorOpen || sensorClose) {
+    return sendCommandCompletion(sensorOpen, sensorClose);
+  }
+  return NO_ACTION;
 }
+
 
 /*
  * Checks for any pending actions. The 2 states we care (initially), is OPENING and CLOSING
