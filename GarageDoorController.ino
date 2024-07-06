@@ -8,16 +8,20 @@
 
 //ToDo: initialize all components (WiFi, Serial, etc)
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW); // Ensure relay is off
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi...");
-  }
-  Serial.println("Connected to WiFi");
+  //ToDo: None of this is needed since HTTP and WiFiHelper do all this
+  // you could just call WiFi_Init(); and then have HTTPRequest take care of the details
+  
+  //WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+//
+//  while (WiFi.status() != WL_CONNECTED) {
+//    delay(1000);
+//    Serial.println("Connecting to WiFi...");
+//  }
+//  Serial.println("Connected to WiFi");
   
 }
 
@@ -45,13 +49,23 @@ int sendCommandCompletion(int sensorOpen, int sensorClose){
   }
 
   HTTPRequest req;
+  
+  /*
+   * StaticJsonDocument is deprecated, and replaced by JsonDocument. In addition to that, I like using ArduinoJson for 
+   * "parsing" JSON. Building it is really straightforward and sprintf is your friend. The original code is simpler/faster
+   *  and more compact:
+   *   sprintf(req.dataBuffer(), "{\"status\":\"%s\"}", sensorOpen ? "open_complete" : ( sensorClose ? "close_complete" : "in_progress"));
+   *   
+   *  Also, the way request.postJSON works is by expecting the data to be ready in the response.data buffer (which you can get a pointer to 
+   *  through request.dataBuffer()
+   */
   StaticJsonDocument<200> doc;
+  JsonDocument doc;
   doc["status"] = sensorOpen ? "open_complete" : (sensorClose ? "close_complete" : "in_progress");
-
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer);
-
-  auto res = req.postJSON(SERVER_URL, "/api/door", 443, ACCESS_TOKEN, jsonBuffer);
+  
+  auto res = req.postJSON(SERVER_URL, "/api/door", 443, ACCESS_TOKEN, NULL);
 
   if (!res) {
     return INVALID_RESPONSE;
