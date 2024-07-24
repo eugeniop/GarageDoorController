@@ -17,9 +17,7 @@ class HTTPRequest {
   HTTPResponse response;
  private:
     WiFiSSLClient client;
-    
-    //static void (*keepAlive)();
-    
+        
     typedef enum { HEADERS, BODY, DONE } HTTP_RX_STATE;
 
     void parseHeader(char * line){
@@ -41,7 +39,6 @@ class HTTPRequest {
       if(strncmp(line, "Content-Disposition", 19)==0){
         strtok(line, "\"");
         const char * fileName = strtok(NULL, "\"");
-//        trace.log("HTTP", "File download: ", fileName);
         strcpy(response.fileName, fileName);
         response.file = 1;
         return; 
@@ -50,13 +47,11 @@ class HTTPRequest {
       if(strncmp(line, "Content-Length", 14)==0){
         char * l = strchr((char *)line, ' ');
         response.length = atoi(l);
-//        trace.log("HTTP", "Response length: ", response.length);
         return;
        }
 
        //In some cases, payload might come "chunked"
        if(strncmp(line, "Transfer-Encoding: chunked", 26)==0){
-//        trace.log("HTTP", "Response chunked");
         response.chunked = 1;
         return;
        }
@@ -65,94 +60,9 @@ class HTTPRequest {
        if(strncmp(line, "Content-Type:", 13)==0){
         char * ct = strchr((char *)line, ' ');
         strcpy(response.contentType, ct);
-//        trace.log("HTTP", "Response Content-Type: ", response.contentType);
         return;
        }
     }
-
-//    HTTPResponse * processFileDownload(Stream * out){
-//      /* response.length contains the size of the file
-//         this->fileName is the name of the file. However, if `out` is not NULL
-//         then the file will passed to the stream to whatever file the client of
-//         this library defines. It is the responsbility of the caller
-//         to close the file.
-//      */
-//
-//      Stream * output = NULL;
-//      File file;
-//      
-//      if(out != NULL){
-//        output = out;
-//      } else {
-//        
-//        if(!SD.begin(SD_CS)){
-////          error.log("HTTP", "Filedownload. SD card initialization failed.");
-//          return NULL;
-//        }
-//
-////        trace.log("HTTP", "processFileDownload. File: ", response.fileName); 
-//
-//        if(SD.exists(response.fileName)){
-////          trace.log("HTTP", "processFileDownload. Removing existing file: ", response.fileName); 
-//          SD.remove(response.fileName);
-//        }
-//
-//        file = SD.open(response.fileName, O_RDWR | O_CREAT); //FILE_WRITE inlcudes the O_APPEND flag which prevents seek to work.
-//
-//        if(!file){
-////          error.log("HTTP", "Filedownload. Cannot create file. Check space in SD.");
-//          SD.end();
-//          return NULL;
-//        }
-//
-//        file.seek(0); // Write from the beginning
-//        output = &file;
-//      }
-//
-////      trace.log("HTTP", "processFileDownload. Ready to read");
-//
-//      int bytesWritten = 0;
-//      int bytesReady = 0;
-//
-//      //char downloadBuffer[MAX_DOWNLOAD_BUFFER];
-//      
-//      // Writing to the file is "slow" so that gives time for the client 
-//      // to receive data from the server. But we retry anyway a couple times 
-//      // as I've seen the file size not always being = Content-Length
-//      int retries = 0;
-//      while(retries <= MAX_RETRIES){
-//        while((bytesReady = client.available())){
-////          if(keepAlive) { (*keepAlive)(); }
-//          trace.log("HTTP", "Bytes available: ", bytesReady);
-//          int r = client.readBytes(response.data, sizeof(response.data));
-//          output->write(response.data, r);
-//          bytesWritten += r;
-//          if(bytesWritten % 100 == 0){
-//            trace.log("HTTP", "Written ", bytesWritten);
-//          }
-//        }
-//        if(bytesWritten == response.length){
-//          retries = MAX_RETRIES;
-//          break;
-//        } else {
-////          error.log("HTTP", "processDownload. Download stream interrupted. Waiting and retrying. Retries:", retries);
-//          delay(1000L);
-//        }
-//      }
-//
-//      if(out==NULL){
-//        //It is a file, close it
-//        file.close();
-//      }
-//      
-//      if(bytesWritten == response.length){
-////        trace.log("HTTP", "File downloaded");
-//        return &response;
-//      }
-//
-////      error.log("HTTP", "Download incomplete. Received bytes:", bytesWritten);
-//      return NULL;
-//    }
 
     /*
       In chunked responses, the body is sent in multiple parts that need to be concatenated.
@@ -219,7 +129,6 @@ class HTTPRequest {
       int retries = 0;
       while(retries <= MAX_RETRIES){
         while(client.available()){
-//          (*keepAlive)();
           char length[10]; // This stores just the chunk length
           unsigned int chunkLength = 0;
           length[client.readBytesUntil('\r', length, sizeof(length))] = '\0'; //Read length
@@ -228,16 +137,13 @@ class HTTPRequest {
           chunkLength = computeLength(length);
 
           if(chunkLength<0){
-//            error.log("HTTP", "Invalid chunk length: ", length);
             return NULL;   
           }
 
-//          trace.log("HTTP", "Chunk length: ", chunkLength); 
 
           if(chunkLength > 0){
             //We are writing to the buffer and we ran out iof space
             if(!out && sizeof(response.data) - totalSize - chunkLength <= 0){
-//              error.log("HTTP", "Not enough memory for chunked response body. Max: ", (int)sizeof(response.data));
               response.reset();
               return NULL;
             }
@@ -256,7 +162,6 @@ class HTTPRequest {
             break;
           }
         }
-//        error.log("HTTP", "processChunkedResponse. Data stream interrupted. Waiting and retrying. Retries:", retries);
         delay(1000L);
       }
 
@@ -264,10 +169,8 @@ class HTTPRequest {
       response.length = totalSize;
 
       if(!out){
-        //debug.logHex("HTTP", "Chunked Response: ", response.data, totalSize);
-//        trace.log("HTTP", "processChunkedResponse. Size: ", totalSize);
+
       } else {
-//        trace.log("HTTP", "Chunked Response written to out Stream");
       }
       
       return &response;
@@ -278,12 +181,9 @@ class HTTPRequest {
       //Content-Length is present
       //response.length indicates the size of the data payload
       if(sizeof(response.data) < response.length + 1){
-//        metrics.HTTPResNoMemory++;
-//        error.log("HTTP", "processResponse. Not enough memory for response body.");
         response.length = 0;
         return NULL;
       }
-//      trace.log("HTTP", "processResponse. Reading response body. Len:", response.length);
 
       //If no out Stream is supplied, we just write t the Response buffer
       FixedSizeCharStream resp(response.data, sizeof(response.data));
@@ -296,7 +196,6 @@ class HTTPRequest {
       int bytesRead = 0;
       int retries = 0;
       while(retries < MAX_RETRIES){
-//        (*keepAlive)();
         while(client.available()){
           int c = client.read();
           output->write(c);
@@ -306,7 +205,6 @@ class HTTPRequest {
           //we are done!
           break;
         }
-//        error.log("HTTP", "processResponse. Data stream interrupted. Waiting and retrying. Retries:", retries);
         delay(1000L);
       }
       
@@ -314,8 +212,6 @@ class HTTPRequest {
 
       //ToDo: fix dump to take into account the buffer used
       if(!out){ //data is in the buffer
-        //debug.logHex("HTTP", "Non-chunked Response: ", response.data, response.length);
-//        trace.log("HTTP", "Non-chunked Response. Length: ", response.length);
       }
       
       return &response;
@@ -358,18 +254,13 @@ class HTTPRequest {
       //We give some time for the bytes to arrive, but only a few
       int retries = 0;
       while(retries <= MAX_RETRIES){
-//        (*keepAlive)();
         if(client.available()) break;
         delay(MAGIC_DELAY);
         retries++;
       }
 
-//      trace.log("HTTP", "processResponse. Retries waiting for data:", retries);
-
       //If no data is available....we give up
       if(!client.available()){
-//        (*keepAlive)();
-//        error.log("HTTP", "Waited for response data. Exhausted retries:", retries);
         client.stop();
         return resp;
       }
@@ -378,7 +269,6 @@ class HTTPRequest {
       while(retries <= MAX_RETRIES){
         retries++;
         while(client.available()){
-          //(*keepAlive)();
           switch(state){
             case HEADERS:
               {
@@ -387,8 +277,6 @@ class HTTPRequest {
                 response.data[bytes] = '\0';
                 //trace.logHex("HTTP", "Data", response.data, bytes);
                 if(strlen(response.data) == 1){
-                  // Headers - Body separator
-//                  trace.log("HTTP", "processBody. Headers done, processing body");
                   state = BODY;
                 } else {
                   parseHeader(response.data);
@@ -400,7 +288,6 @@ class HTTPRequest {
               break;
             case BODY:
             {
-//              trace.log("HTTP", "processBody. Ready to process body.");
               resp = processBody(out);
               state = DONE;
               retries = MAX_RETRIES;
@@ -410,7 +297,6 @@ class HTTPRequest {
         }
       }
       client.stop();
-//      (*keepAlive)();
       return resp;
     }
 
@@ -422,21 +308,13 @@ class HTTPRequest {
         // Connected to WiFi - connect to server
         int retries = 3;
         while(retries--){
-//          (*keepAlive)();
-//          trace.log("HTTP", "Connecting to server:", server);
-
-          //Watchdog.disable();
           auto r = client.connect(server, port);
           //Watchdog.enable(WDT_TIMEOUT);
 
           if(r){
-//            trace.log("HTTP", "Connected to server:", server);
             return WL_CONNECTED;
           }
           
-//          trace.log("HTTP", "HTTP. Connection to server failed: ", server);
-//          trace.log("HTTP", "Trying again...");
-//          (*keepAlive)();
           delay(MAGIC_DELAY); // Magic delay
         }
         Serial.println("Connect with server failed after 3 tries");
@@ -451,7 +329,6 @@ class HTTPRequest {
     }
 
     void sendHTTPHeaders(Stream & s, const char * verb, const char * route, const char * server, const char * access_token, const char * contentType, int length){
-//      (*keepAlive)();
       s_printf(&s, "%s %s HTTP/1.1\r\n", verb, route);
       s_printf(&Serial, "%s %s HTTP/1.1\r\n", verb, route);
       s_printf(&s, "Host: %s\r\n", server);
@@ -473,9 +350,6 @@ class HTTPRequest {
       }
       s.println("Connection: close");
       s.println();
-      //Serial.println("Connection: close");
-      //Serial.println();
-//      (*keepAlive)();
     }
     
     HTTPResponse * post(const char * server, const char * route, int port, const char * contentType, const char * access_token, void (*onHeader)(const char *)){
@@ -485,8 +359,6 @@ class HTTPRequest {
 
       const int length = strlen(response.data);
       sendHTTPHeaders(client, "POST", route, server, access_token, contentType, length);
-      //debug.logHex("HTTP", "POST", response.data, length);
-//      trace.log("HTTP", "POST", length);
       client.print(response.data);
       return processResponse(onHeader); 
     }
@@ -495,12 +367,6 @@ class HTTPRequest {
     HTTPRequest(){
     }
 
-//    void init(void (*keepAliveCB)()){
-//      keepAlive = keepAliveCB;
-//      if(!keepAlive){
-//        error.log("HTTP", "No KeepAlive callback. (Should not happen)"); 
-//      }
-//    }
 
     void init(){
     }
@@ -527,9 +393,7 @@ class HTTPRequest {
         return NULL;
       }
       sendHTTPHeaders(client, "GET", route, server, access_token, "", 0);
-//      trace.log("HTTP", "GET. Request sent");
-//      trace.log("HTTP", "Server:", server);
-//      trace.log("HTTP", "Route:", route);
+
       return processResponse(onHeader, out);
     }
 
@@ -541,19 +405,6 @@ class HTTPRequest {
       serializeJson(*doc, client);
       return processResponse(onHeader);
     }
-
-//    Stream * postStreamedContent(const char * server, const char * route, int port, const char * contentType, const char * accessToken, int contentLength){
-//      if(ConnectServer(server, port) != WL_CONNECTED){
-//        return NULL;
-//      }
-//      sendHTTPHeaders(client, "POST", route, server, accessToken, contentType, contentLength);
-//      return &client;
-//    };
-//
-//    HTTPResponse * closeStreamedContent(void (*onHeader)(const char *)){
-//      return processResponse(onHeader);
-//    };
-};
 
 //void (*HTTPRequest::keepAlive)();
 

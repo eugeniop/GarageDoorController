@@ -101,14 +101,6 @@ int checkCommandComplete(){
     counter--;
     return NO_ACTION;
   }
-  
-//  int sensorOpen = digitalRead(SENSOR_OPEN_PIN);
-//  int sensorClose = digitalRead(SENSOR_CLOSE_PIN);
-//
-//  if (sensorOpen || sensorClose) {
-//    return sendCommandCompletion(sensorOpen, sensorClose);
-//  }
-//  return NO_ACTION;
 }
 
 

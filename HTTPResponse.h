@@ -38,19 +38,7 @@ class HTTPResponse {
       contentType[0] = '\0';
     }
 
-    void dump(){
-//      trace.log("HTTP Res", "Status: ", statusCode);
-//      trace.log("HTTP Res", chunked ? "Chunked" : "Not Chunked");
-      if(file){
-//        trace.log("HTTP Res", "File Downloaded: ", fileName);
-      }
-      if(length > 0){
-//        trace.log("HTTP Res", "Content-Length: ", length);
-//        trace.logHex("HTTP Res", "Data", data, length);
-      } else {
-//        trace.log("HTTP Res", "No content");
-      }
-    };
+
 };
 
 #endif

@@ -44,7 +44,7 @@ int WiFi_ConnectWithParams(const char * ssid, const char * password, int retries
 //  trace.log("WiFi", "Connecting.");
   status = WiFi.status();
   if (status == WL_NO_SHIELD) {
-    //error.log("WiFi", "No WiFi shield.");
+    error.log("WiFi", "No WiFi shield.");
     // If we reach this, something bad really happened. We stop the board and wait for WDT 
     // to kick-in and reset the board.
     while(1){
@@ -53,16 +53,13 @@ int WiFi_ConnectWithParams(const char * ssid, const char * password, int retries
   }
 
   if(strlen(ssid)==0){
-//    error.log("WiFi", "SSID is required");
     return status;
   }
   
   while(status != WL_CONNECTED){
     if(strlen(password) > 0){
       status = WiFi.begin(ssid, password);
-//      trace.log("WiFi", "Connecting with password. Try: ", retries);
     } else {
-//      trace.log("WiFi", "Connecting with NO password. Try: ", retries);
       status = WiFi.begin(ssid);  //Passwordless WiFi
     }
     if(--retries == 0){
@@ -74,9 +71,9 @@ int WiFi_ConnectWithParams(const char * ssid, const char * password, int retries
   }
   
   if(status == WL_CONNECTED){
-//    trace.log("WiFi", "Connected WiFi");
+    trace.log("WiFi", "Connected WiFi");
   } else {
-//    error.log("WiFi", "Connect failed: ", status);
+    error.log("WiFi", "Connect failed: ", status);
   }
   
   return status;
@@ -91,14 +88,11 @@ unsigned long WiFi_GetTime(){
 }
 
 void WiFi_Close(){
-  
-//  trace.log("WiFi", "Shutting down");
-  
+    
   WiFi.disconnect();  //this function takes same time it seems...
   
   int retry = 5;
   while(WiFi.status()==WL_CONNECTED && retry--){
-//    trace.log("WiFi", "Disconnecting. Try: ", retry);
     delay(1000);  //Magic delay
   }
 
