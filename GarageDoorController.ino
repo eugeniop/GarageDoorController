@@ -4,25 +4,18 @@
 
 #include "Config.h" // Configuration file for WiFi, server, and access token
 
-#define ACCESS_TOKEN  "TOKEN"
-
 //ToDo: initialize all components (WiFi, Serial, etc)
 void setup() {
+
+  //Enable for debugging
   Serial.begin(115200);
+  while(!Serial);
+
+  //Initialize WiFi
+  WiFi_Init();
+  
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW); // Ensure relay is off
-
-  //ToDo: None of this is needed since HTTP and WiFiHelper do all this
-  // you could just call WiFi_Init(); and then have HTTPRequest take care of the details
-  
-  //WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-//
-//  while (WiFi.status() != WL_CONNECTED) {
-//    delay(1000);
-//    Serial.println("Connecting to WiFi...");
-//  }
-//  Serial.println("Connected to WiFi");
-  
 }
 
 typedef enum { NO_ACTION, INVALID_RESPONSE, INVALID_REQUEST, REQUEST_FAILED, ACTIVATED, COMPLETED } COMMAND_RESULT;
@@ -32,12 +25,33 @@ typedef enum { NO_ACTION, INVALID_RESPONSE, INVALID_REQUEST, REQUEST_FAILED, ACT
  * This function needs to activate the relay that will simulate the pressing of the button on the garage door existing control
  * 
  */
+
+// For simulation
+typedef enum { OPENING, CLOSING } doorState;
+int doorStatus;
+int counter;
+ 
 int executeCommandOnDoor(const char * status){
   Serial.println("Activating relay to open/close the door...");
-  digitalWrite(RELAY_PIN, HIGH); // Activate relay
+  //digitalWrite(RELAY_PIN, HIGH); // Activate relay
   delay(1000); // Simulate button press duration
-  digitalWrite(RELAY_PIN, LOW); // Deactivate relay
-  return ACTIVATED;
+  //digitalWrite(RELAY_PIN, LOW); // Deactivate relay
+
+  int ret = NO_ACTION;
+
+  if(!strcmp(status, "opening")){
+    doorStatus = OPENING;
+    counter = 3;
+    ret = ACTIVATED;
+  }
+
+  if(!strcmp(status, "closing")){
+    doorStatus = CLOSING;
+    counter = 3;
+    ret = ACTIVATED;
+  }
+  
+  return ret;
 }
 
 /*
@@ -59,33 +73,43 @@ int sendCommandCompletion(int sensorOpen, int sensorClose){
    *  Also, the way request.postJSON works is by expecting the data to be ready in the response.data buffer (which you can get a pointer to 
    *  through request.dataBuffer()
    */
-  StaticJsonDocument<200> doc;
-  JsonDocument doc;
-  doc["status"] = sensorOpen ? "open_complete" : (sensorClose ? "close_complete" : "in_progress");
-  char jsonBuffer[512];
-  serializeJson(doc, jsonBuffer);
-  
-  auto res = req.postJSON(SERVER_URL, "/api/door", 443, ACCESS_TOKEN, NULL);
+  sprintf(req.dataBuffer(), "{\"status\":\"%s\",\"controllerId\":\"%s\"}", sensorOpen ? "open_complete" : ( sensorClose ? "close_complete" : "in_progress"), CTRL_ID);
+  Serial.println(req.dataBuffer());
+  auto res = req.postJSON(SERVER_URL, DOOR_PATH, 443, API_KEY, NULL);
 
-  if (!res) {
+  if(!res){
     return INVALID_RESPONSE;
   }
 
-  if (res->statusCode == 200) {
+  if(res->statusCode == 200) {
+    Serial.println("Completed");
+    Serial.println(res->statusCode);
     return COMPLETED;
   }
 
+  Serial.println("Failed");
+  Serial.println(res->statusCode);
   return REQUEST_FAILED;
 }
 
 int checkCommandComplete(){
-  int sensorOpen = digitalRead(SENSOR_OPEN_PIN);
-  int sensorClose = digitalRead(SENSOR_CLOSE_PIN);
 
-  if (sensorOpen || sensorClose) {
-    return sendCommandCompletion(sensorOpen, sensorClose);
+  if(counter == 0){
+    Serial.println("Completion");
+    return sendCommandCompletion(doorStatus==OPENING, doorStatus==CLOSING);
+  } else {
+    Serial.println(counter);
+    counter--;
+    return NO_ACTION;
   }
-  return NO_ACTION;
+  
+//  int sensorOpen = digitalRead(SENSOR_OPEN_PIN);
+//  int sensorClose = digitalRead(SENSOR_CLOSE_PIN);
+//
+//  if (sensorOpen || sensorClose) {
+//    return sendCommandCompletion(sensorOpen, sensorClose);
+//  }
+//  return NO_ACTION;
 }
 
 
@@ -97,18 +121,26 @@ int getCommand(){
 
   //ToDo: move all parameters to configuration
   HTTPRequest req;
-  auto res = req.get("https://herokuapp.com", "/api/door", 443, ACCESS_TOKEN, NULL);
+
+  char apiPath[100];
+  sprintf(apiPath, STATUS_PATH, CTRL_ID);
+  Serial.println(apiPath);
+  auto res = req.get(SERVER_URL, apiPath, 443, API_KEY, NULL);
   
   if(!res){
+    Serial.println("Invalid response");
     return INVALID_RESPONSE;
   }
   
   if(res->statusCode != 200){
+    Serial.println("Request failed:");
+    Serial.println(res->statusCode);
     return REQUEST_FAILED;
   }
   
   JsonDocument doc;
   deserializeJson(doc, res->data);
+  Serial.println(res->data);
   
   const char* status = doc["status"];
   
@@ -132,6 +164,7 @@ void loop() {
   int ret;
   switch(state){
     case WAITING:
+      Serial.println("Getting command");
       ret=getCommand();
       if(ret==ACTIVATED){
         state=ACTIVATING;
@@ -148,5 +181,5 @@ void loop() {
       break;
   }
 
-  delay(1000);  //We check ever second
+  delay(2000);  //We check every 2 seconds
 }

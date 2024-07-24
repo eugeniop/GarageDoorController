@@ -32,4 +32,4 @@
 *.app
 
 # Hiding the Configurations
-Config.h
+secrets.h

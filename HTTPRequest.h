@@ -7,14 +7,17 @@
 #include "streamPrintf.h"
 #include "wifiHelper.h"
 #include "StringStream.h"
+#include "Config.h"
 
 #define MAGIC_DELAY 1000    //This seems to be the smallest delay (a value of 500 fails)
 #define MAX_RETRIES 5
 
 class HTTPRequest {
-  
+ public:
+  HTTPResponse response;
+ private:
     WiFiSSLClient client;
-    HTTPResponse response;
+    
     //static void (*keepAlive)();
     
     typedef enum { HEADERS, BODY, DONE } HTTP_RX_STATE;
@@ -321,19 +324,19 @@ class HTTPRequest {
     HTTPResponse * processBody(Stream * out){
 
       if(response.length == 0 && response.chunked == 0){
-//        trace.log("HTTP", "No content");
+        Serial.println("HTTP. No content");
         return NULL;
       }
 
       //Check if we are downloading a file
       if(response.file){
-//        trace.log("HTTP", "Processing file download");
+        Serial.println("HTTP: Processing file download");
         return NULL; // NOT SUPPORTED processFileDownload(out);
       }
         
       //Response might be "chunked"
       if(response.chunked){
-//        trace.log("HTTP", "Processing chunked response");
+        Serial.println("HTTP: Processing chunked response");
         return processChunkedResponse(out);
       }
 
@@ -412,11 +415,8 @@ class HTTPRequest {
     }
 
     int ConnectServer(const char * server, int port){
-//      if(!keepAlive){
-////        trace.log("HTTP", "No keepAlive in ConnectServer.");
-//      }
 
-      int status = WiFi_ConnectWithParams("SSID", "PWD", 10); //ToDo: change for parameters
+      int status = WiFi_ConnectWithParams(SSID, WIFI_PWD, 3); //ToDo: change for parameters
       
       if(status == WL_CONNECTED){
         // Connected to WiFi - connect to server
@@ -439,9 +439,9 @@ class HTTPRequest {
 //          (*keepAlive)();
           delay(MAGIC_DELAY); // Magic delay
         }
-//        error.log("HTTP", "Connect with server failed after 3 tries");
+        Serial.println("Connect with server failed after 3 tries");
       } else {
-//        error.log("HTTP", "WiFi Connection failed");
+        Serial.println("WiFi Connection failed");
       }
 
       client.stop();
@@ -453,23 +453,23 @@ class HTTPRequest {
     void sendHTTPHeaders(Stream & s, const char * verb, const char * route, const char * server, const char * access_token, const char * contentType, int length){
 //      (*keepAlive)();
       s_printf(&s, "%s %s HTTP/1.1\r\n", verb, route);
-      //s_printf(&Serial, "%s %s HTTP/1.1\r\n", verb, route);
+      s_printf(&Serial, "%s %s HTTP/1.1\r\n", verb, route);
       s_printf(&s, "Host: %s\r\n", server);
-      //s_printf(&Serial, "Host: %s\r\n", server);
+      s_printf(&Serial, "Host: %s\r\n", server);
       
       if(access_token && strlen(access_token) > 0){
-        s.print("Authorization: Bearer ");  //s_printf has a limited buffer. Tokens can be long
+        s.print("Authorization: ");  //s_printf has a limited buffer. Tokens can be long
         s.println(access_token);     
-//        Serial.print("Authorization: Bearer ");  //s_printf has a limited buffer. Tokens can be long
-//        Serial.println(access_token);          
+        Serial.print("Authorization: ");  //s_printf has a limited buffer. Tokens can be long
+        Serial.println(access_token);          
       }
       if(contentType && strlen(contentType)>0){
         s_printf(&s, "Content-Type: %s\r\n", contentType);
-        //s_printf(&Serial, "Content-Type: %s\r\n", contentType);
+        s_printf(&Serial, "Content-Type: %s\r\n", contentType);
       }
       if(length>0){
         s_printf(&s, "Content-Length: %d\r\n", length);
-        //s_printf(&Serial, "Content-Length: %d\r\n", length);
+        s_printf(&Serial, "Content-Length: %d\r\n", length);
       }
       s.println("Connection: close");
       s.println();
