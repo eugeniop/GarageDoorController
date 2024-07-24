@@ -2,7 +2,7 @@
 
 #include "HTTPRequest.h"
 
-#include "Config.h" // Configuration file for WiFi, server, and access token
+#include "Config.h" // Configuration file for WiFi, server, etc
 
 //ToDo: initialize all components (WiFi, Serial, etc)
 void setup() {
@@ -19,7 +19,6 @@ void setup() {
 }
 
 typedef enum { NO_ACTION, INVALID_RESPONSE, INVALID_REQUEST, REQUEST_FAILED, ACTIVATED, COMPLETED } COMMAND_RESULT;
-
 
 /*
  * This function needs to activate the relay that will simulate the pressing of the button on the garage door existing control
