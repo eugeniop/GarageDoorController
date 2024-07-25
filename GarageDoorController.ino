@@ -16,6 +16,8 @@ void setup() {
   
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW); // Ensure relay is off
+
+  trace.log("MAIN", "setup", "Controller started");
 }
 
 typedef enum { NO_ACTION, INVALID_RESPONSE, INVALID_REQUEST, REQUEST_FAILED, ACTIVATED, COMPLETED } COMMAND_RESULT;
@@ -31,7 +33,7 @@ int doorStatus;
 int counter;
  
 int executeCommandOnDoor(const char * status){
-  Serial.println("Activating relay to open/close the door...");
+  trace.log("MAIN", "Activating relay to open/close the door...");
   //digitalWrite(RELAY_PIN, HIGH); // Activate relay
   delay(1000); // Simulate button press duration
   //digitalWrite(RELAY_PIN, LOW); // Deactivate relay
@@ -58,6 +60,7 @@ int executeCommandOnDoor(const char * status){
  */
 int sendCommandCompletion(int sensorOpen, int sensorClose){
   if (sensorOpen && sensorClose) {
+    error.log("MAIN", "sendCommandCompletion", "Both sensors are activated");
     return INVALID_REQUEST;
   }
 
@@ -73,7 +76,7 @@ int sendCommandCompletion(int sensorOpen, int sensorClose){
    *  through request.dataBuffer()
    */
   sprintf(req.dataBuffer(), "{\"status\":\"%s\",\"controllerId\":\"%s\"}", sensorOpen ? "open_complete" : ( sensorClose ? "close_complete" : "in_progress"), CTRL_ID);
-  Serial.println(req.dataBuffer());
+  trace.log("MAIN", "sendCommandCompletion", req.dataBuffer());
   auto res = req.postJSON(SERVER_URL, DOOR_PATH, 443, API_KEY, NULL);
 
   if(!res){
@@ -81,32 +84,27 @@ int sendCommandCompletion(int sensorOpen, int sensorClose){
   }
 
   if(res->statusCode == 200) {
-    Serial.println("Completed");
-    Serial.println(res->statusCode);
+    trace.log("MAIN", "sendCommandCompletion. Complete"); 
     return COMPLETED;
   }
 
-  Serial.println("Failed");
-  Serial.println(res->statusCode);
+  error.log("MAIN", "sendCommandCompletion", res->statusCode);
   return REQUEST_FAILED;
 }
 
 int checkCommandComplete(){
-
   if(counter == 0){
-    Serial.println("Completion");
+    trace.log("MAIN", "checkCommandComplete", "Completion");
     return sendCommandCompletion(doorStatus==OPENING, doorStatus==CLOSING);
   } else {
-    Serial.println(counter);
+    trace.log("MAIN", "checkCommandComplete", counter);
     counter--;
     return NO_ACTION;
   }
 }
 
-
 /*
  * Checks for any pending actions. The 2 states we care (initially), is OPENING and CLOSING
- * 
  */
 int getCommand(){
 
@@ -115,17 +113,16 @@ int getCommand(){
 
   char apiPath[100];
   sprintf(apiPath, STATUS_PATH, CTRL_ID);
-  Serial.println(apiPath);
+  trace.log("MAIN", "getCommand. Using path:", apiPath);
   auto res = req.get(SERVER_URL, apiPath, 443, API_KEY, NULL);
   
   if(!res){
-    Serial.println("Invalid response");
+    error.log("MAIN", "getCommand", "Invalid response");
     return INVALID_RESPONSE;
   }
   
   if(res->statusCode != 200){
-    Serial.println("Request failed:");
-    Serial.println(res->statusCode);
+    error.log("MAIN", "getCommand. Request failed:", res->statusCode);
     return REQUEST_FAILED;
   }
   
@@ -155,15 +152,17 @@ void loop() {
   int ret;
   switch(state){
     case WAITING:
-      Serial.println("Getting command");
+      trace.log("MAIN", "loop", "Getting command");
       ret=getCommand();
       if(ret==ACTIVATED){
+        trace.log("MAIN", "loop", "Activating door");
         state=ACTIVATING;
       }
       break;
     case ACTIVATING:
       ret=checkCommandComplete();
       if(ret==COMPLETED){
+        trace.log("MAIN", "loop", "Completed activation");
         state=WAITING;
       }
       break;

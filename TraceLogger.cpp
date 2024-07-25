@@ -1,3 +1,4 @@
-#include "TraceLogger.h"
-
-TraceLogger trace;
+//#include "TraceLogger.h"
+//
+//TraceLogger trace;
+//TraceLogger error;
