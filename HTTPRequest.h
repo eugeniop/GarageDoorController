@@ -39,6 +39,7 @@ class HTTPRequest {
       if(strncmp(line, "Content-Disposition", 19)==0){
         strtok(line, "\"");
         const char * fileName = strtok(NULL, "\"");
+        trace.log("HTTP", "File download: ", fileName);
         strcpy(response.fileName, fileName);
         response.file = 1;
         return; 
@@ -47,12 +48,14 @@ class HTTPRequest {
       if(strncmp(line, "Content-Length", 14)==0){
         char * l = strchr((char *)line, ' ');
         response.length = atoi(l);
+        trace.log("HTTP", "Response length: ", response.length);
         return;
        }
 
        //In some cases, payload might come "chunked"
        if(strncmp(line, "Transfer-Encoding: chunked", 26)==0){
         response.chunked = 1;
+        trace.log("HTTP", "Response chunked");
         return;
        }
 
@@ -60,6 +63,7 @@ class HTTPRequest {
        if(strncmp(line, "Content-Type:", 13)==0){
         char * ct = strchr((char *)line, ' ');
         strcpy(response.contentType, ct);
+        trace.log("HTTP", "Response Content-Type: ", response.contentType);
         return;
        }
     }
