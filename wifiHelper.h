@@ -1,6 +1,8 @@
 #ifndef WIFIHELPER_H
 #define WIFIHELPER_H
 
+#include "TraceLogger.h"
+
 //ToDo: move to general config
 #define ADAFRUIT_FEATHER_M0_
 #define WIFI_CONNECT_TIMEOUT_MS 10000

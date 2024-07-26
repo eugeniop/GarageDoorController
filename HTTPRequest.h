@@ -8,6 +8,7 @@
 #include "wifiHelper.h"
 #include "StringStream.h"
 #include "Config.h"
+#include "TraceLogger.h"
 
 #define MAGIC_DELAY 1000    //This seems to be the smallest delay (a value of 500 fails)
 #define MAX_RETRIES 5
@@ -224,19 +225,19 @@ class HTTPRequest {
     HTTPResponse * processBody(Stream * out){
 
       if(response.length == 0 && response.chunked == 0){
-        Serial.println("HTTP. No content");
+        trace.log("HTTP", "No content");
         return NULL;
       }
 
       //Check if we are downloading a file
       if(response.file){
-        Serial.println("HTTP: Processing file download");
+        trace.log("HTTP", "Processing file download");
         return NULL; // NOT SUPPORTED processFileDownload(out);
       }
         
       //Response might be "chunked"
       if(response.chunked){
-        Serial.println("HTTP: Processing chunked response");
+        trace.log("HTTP", "Processing chunked response");
         return processChunkedResponse(out);
       }
 
@@ -321,9 +322,9 @@ class HTTPRequest {
           
           delay(MAGIC_DELAY); // Magic delay
         }
-        Serial.println("Connect with server failed after 3 tries");
+        error.log("HTTP", "Connect with server failed after 3 tries");
       } else {
-        Serial.println("WiFi Connection failed");
+        error.log("HTTP", "WiFi Connection failed");
       }
 
       client.stop();
@@ -344,14 +345,17 @@ class HTTPRequest {
         Serial.print("Authorization: ");  //s_printf has a limited buffer. Tokens can be long
         Serial.println(access_token);          
       }
+      
       if(contentType && strlen(contentType)>0){
         s_printf(&s, "Content-Type: %s\r\n", contentType);
         s_printf(&Serial, "Content-Type: %s\r\n", contentType);
       }
+      
       if(length>0){
         s_printf(&s, "Content-Length: %d\r\n", length);
         s_printf(&Serial, "Content-Length: %d\r\n", length);
       }
+      
       s.println("Connection: close");
       s.println();
     }
@@ -370,7 +374,6 @@ class HTTPRequest {
   public:
     HTTPRequest(){
     }
-
 
     void init(){
     }
@@ -409,7 +412,7 @@ class HTTPRequest {
       serializeJson(*doc, client);
       return processResponse(onHeader);
     }
-
+};
 //void (*HTTPRequest::keepAlive)();
 
 #endif
