@@ -212,6 +212,8 @@ class HTTPRequest {
         }
         delay(1000L);
       }
+
+      trace.logHex("HTTP", "ProcessResponse", response.data, response.length);
       
       output->write((uint8_t)'\0');   //Terminate response so all str functions can work directly.
 
@@ -307,7 +309,7 @@ class HTTPRequest {
 
     int ConnectServer(const char * server, int port){
 
-      int status = WiFi_ConnectWithParams(SSID, WIFI_PWD, 3); //ToDo: change for parameters
+      int status = WiFi_ConnectWithParams(WIFI_SSID, WIFI_PWD, 3); //ToDo: change for parameters
       
       if(status == WL_CONNECTED){
         // Connected to WiFi - connect to server
@@ -358,7 +360,7 @@ class HTTPRequest {
       
       s.println("Connection: close");
       s.println();
-    }
+    };
     
     HTTPResponse * post(const char * server, const char * route, int port, const char * contentType, const char * access_token, void (*onHeader)(const char *)){
       if(ConnectServer(server, port) != WL_CONNECTED){
@@ -366,34 +368,34 @@ class HTTPRequest {
       }
 
       const int length = strlen(response.data);
+
+      trace.logHex("HTTP", "POST", response.data, length);
+      
       sendHTTPHeaders(client, "POST", route, server, access_token, contentType, length);
       client.print(response.data);
       return processResponse(onHeader); 
-    }
+    };
     
   public:
     HTTPRequest(){
-    }
-
-    void init(){
-    }
+    };
 
     char * dataBuffer(){
       return response.data;
-    }
+    };
 
     //POSTs a form to server
     HTTPResponse * postForm(const char * server, const char * route, int port, const char * access_token, void (*onHeader)(const char *)){
       return post(server, route, port, "application/x-www-form-urlencoded", access_token, onHeader);
-    }
+    };
    
     HTTPResponse * postJSON(const char * server, const char * route, int port, const char * access_token, void (*onHeader)(const char *)){
       return post(server, route, port, "application/json", access_token, onHeader);
-    }
+    };
    
     HTTPResponse * postText(const char * server, const char * route, int port, const char * access_token, void (*onHeader)(const char *)){
       return post(server, route, port, "text/plain", access_token, onHeader);
-    }
+    };
 
     HTTPResponse * get(const char * server, const char * route, int port, const char * access_token, void (*onHeader)(const char *), Stream * out = NULL){
       if(ConnectServer(server, port) != WL_CONNECTED){
@@ -413,6 +415,5 @@ class HTTPRequest {
       return processResponse(onHeader);
     }
 };
-//void (*HTTPRequest::keepAlive)();
 
 #endif
