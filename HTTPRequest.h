@@ -18,6 +18,8 @@ class HTTPRequest {
   HTTPResponse response;
  private:
     WiFiSSLClient client;
+    const char * server;
+    const int port;
         
     typedef enum { HEADERS, BODY, DONE } HTTP_RX_STATE;
 
@@ -120,16 +122,11 @@ class HTTPRequest {
      * 
      */
 
-    HTTPResponse * processChunkedResponse(Stream * out){
+    HTTPResponse * processChunkedResponse(){
       
       int totalSize = 0;
 
-      FixedSizeCharStream bres(response.data, sizeof(response.data));
-      Stream * output = &bres;
-
-      if(out){
-        output = out;
-      }
+      FixedSizeCharStream output(response.data, sizeof(response.data));
 
       int retries = 0;
       while(retries <= MAX_RETRIES){
@@ -145,16 +142,15 @@ class HTTPRequest {
             return NULL;   
           }
 
-
           if(chunkLength > 0){
             //We are writing to the buffer and we ran out iof space
-            if(!out && sizeof(response.data) - totalSize - chunkLength <= 0){
+            if(sizeof(response.data) - totalSize - chunkLength <= 0){
               response.reset();
               return NULL;
             }
 
             for(int b = 0; b < chunkLength; b++){
-              output->write(client.read());
+              output.write(client.read());
             }
 
             //Discard '\r\n'
@@ -170,19 +166,14 @@ class HTTPRequest {
         delay(1000L);
       }
 
-      output->write((uint8_t)'\0');
+      output.write((uint8_t)'\0');
       response.length = totalSize;
-
-      if(!out){
-
-      } else {
-      }
       
       return &response;
     }
 
     //Normal processing - response is written to the buffer or to the stream
-    HTTPResponse * processResponse(Stream * out){
+    HTTPResponse * processNormalResponse(){
       //Content-Length is present
       //response.length indicates the size of the data payload
       if(sizeof(response.data) < response.length + 1){
@@ -191,19 +182,14 @@ class HTTPRequest {
       }
 
       //If no out Stream is supplied, we just write t the Response buffer
-      FixedSizeCharStream resp(response.data, sizeof(response.data));
-      Stream * output = &resp;  //By default we send output to the buffer
-      
-      if(out){
-        output = out;
-      }
+      FixedSizeCharStream output(response.data, sizeof(response.data));
 
       int bytesRead = 0;
       int retries = 0;
       while(retries < MAX_RETRIES){
         while(client.available()){
           int c = client.read();
-          output->write(c);
+          output.write(c);
           bytesRead++;
         }
         if(bytesRead == response.length){
@@ -215,16 +201,12 @@ class HTTPRequest {
 
       trace.logHex("HTTP", "ProcessResponse", response.data, response.length);
       
-      output->write((uint8_t)'\0');   //Terminate response so all str functions can work directly.
-
-      //ToDo: fix dump to take into account the buffer used
-      if(!out){ //data is in the buffer
-      }
+      output.write((uint8_t)'\0');   //Terminate response so all str functions can work directly.
       
       return &response;
     }
 
-    HTTPResponse * processBody(Stream * out){
+    HTTPResponse * processBody(){
 
       if(response.length == 0 && response.chunked == 0){
         trace.log("HTTP", "No content");
@@ -233,24 +215,24 @@ class HTTPRequest {
 
       //Check if we are downloading a file
       if(response.file){
-        trace.log("HTTP", "Processing file download");
-        return NULL; // NOT SUPPORTED processFileDownload(out);
+        trace.log("HTTP", "Processing file download. Not supported");
+        return NULL;
       }
         
       //Response might be "chunked"
       if(response.chunked){
         trace.log("HTTP", "Processing chunked response");
-        return processChunkedResponse(out);
+        return processChunkedResponse();
       }
 
       //Process a regular response
-      return processResponse(out);
+      return processNormalResponse();
     }
 
     /*
       Main response processor
     */
-    HTTPResponse * processResponse(void (*onHeader)(const char * header), Stream * out = NULL){
+    HTTPResponse * processResponse(){
 
       HTTPResponse * resp = NULL;
       HTTP_RX_STATE state = HEADERS;
@@ -287,15 +269,12 @@ class HTTPRequest {
                   state = BODY;
                 } else {
                   parseHeader(response.data);
-                  if(onHeader){
-                    (*onHeader)(response.data);  // If client requested callbacks for headers, call them. This is used for downloading updates
-                  }
                 }
               }
               break;
             case BODY:
             {
-              resp = processBody(out);
+              resp = processBody();
               state = DONE;
               retries = MAX_RETRIES;
             }
@@ -307,9 +286,9 @@ class HTTPRequest {
       return resp;
     }
 
-    int ConnectServer(const char * server, int port){
+    int ConnectServer(){
 
-      int status = WiFi_ConnectWithParams(WIFI_SSID, WIFI_PWD, 3); //ToDo: change for parameters
+      int status = WiFi_ConnectWithParams(WIFI_SSID, WIFI_PWD, 3);
       
       if(status == WL_CONNECTED){
         // Connected to WiFi - connect to server
@@ -335,7 +314,7 @@ class HTTPRequest {
       return WL_CONNECT_FAILED;
     }
 
-    void sendHTTPHeaders(Stream & s, const char * verb, const char * route, const char * server, const char * access_token, const char * contentType, int length){
+    void sendHTTPHeaders(Stream & s, const char * verb, const char * route, const char * contentType, int length, const char * access_token){
       s_printf(&s, "%s %s HTTP/1.1\r\n", verb, route);
       s_printf(&Serial, "%s %s HTTP/1.1\r\n", verb, route);
       s_printf(&s, "Host: %s\r\n", server);
@@ -362,57 +341,43 @@ class HTTPRequest {
       s.println();
     };
     
-    HTTPResponse * post(const char * server, const char * route, int port, const char * contentType, const char * access_token, void (*onHeader)(const char *)){
-      if(ConnectServer(server, port) != WL_CONNECTED){
+    HTTPResponse * httpPutPost(const char * route, const char * verb, const char * contentType, const char * access_token){
+      if(ConnectServer() != WL_CONNECTED){
         return NULL;
       }
 
       const int length = strlen(response.data);
 
-      trace.logHex("HTTP", "POST", response.data, length);
+      trace.logHex("HTTP", verb, response.data, length);
       
-      sendHTTPHeaders(client, "POST", route, server, access_token, contentType, length);
+      sendHTTPHeaders(client, verb, route, contentType, length, access_token);
       client.print(response.data);
-      return processResponse(onHeader); 
+      return processResponse(); 
     };
     
   public:
-    HTTPRequest(){
+    HTTPRequest(const char * server, int port) : server(server), port(port){
     };
 
     char * dataBuffer(){
       return response.data;
     };
-
-    //POSTs a form to server
-    HTTPResponse * postForm(const char * server, const char * route, int port, const char * access_token, void (*onHeader)(const char *)){
-      return post(server, route, port, "application/x-www-form-urlencoded", access_token, onHeader);
-    };
    
-    HTTPResponse * postJSON(const char * server, const char * route, int port, const char * access_token, void (*onHeader)(const char *)){
-      return post(server, route, port, "application/json", access_token, onHeader);
-    };
-   
-    HTTPResponse * postText(const char * server, const char * route, int port, const char * access_token, void (*onHeader)(const char *)){
-      return post(server, route, port, "text/plain", access_token, onHeader);
+    HTTPResponse * postJSON(const char * route, const char * access_token){
+      return httpPutPost(route, "POST", "application/json", access_token);
     };
 
-    HTTPResponse * get(const char * server, const char * route, int port, const char * access_token, void (*onHeader)(const char *), Stream * out = NULL){
-      if(ConnectServer(server, port) != WL_CONNECTED){
+    HTTPResponse * putJSON(const char * route, const char * access_token){
+      return httpPutPost(route, "PUT", "application/json", access_token);
+    };
+   
+    HTTPResponse * get(const char * route, const char * access_token){
+      if(ConnectServer() != WL_CONNECTED){
         return NULL;
       }
-      sendHTTPHeaders(client, "GET", route, server, access_token, "", 0);
+      sendHTTPHeaders(client, "GET", route, NULL, 0, access_token);
 
-      return processResponse(onHeader, out);
-    }
-
-    HTTPResponse * postJSON(const char * server, const char * route, int port, const char * access_token, JsonDocument * doc, void (*onHeader)(const char *)){
-      if(ConnectServer(server, port) != WL_CONNECTED){
-        return NULL;
-      }      
-      sendHTTPHeaders(client, "POST", route, server, access_token, "application/json", measureJson(*doc));
-      serializeJson(*doc, client);
-      return processResponse(onHeader);
+      return processResponse();
     }
 };
 

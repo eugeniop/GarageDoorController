@@ -21,20 +21,31 @@ class Controller {
   Relay relay;
   Door door;
 
-  void waitForInProgress(){
-    while(door.getState()!=Door::MOVING){
+  // Once the relay is activated, we wait for a while for the the door to move
+  // and deactivate either sensors (OPEN or CLOSE).
+  // Total wait: tries * 1000ms
+  int waitForInProgress(){
+    int tries = 10;
+    while(tries--){
       trace.log("CTRL", "Waiting for door to move");
+      auto state = door.getState();
+      if(state == Door::MOVING) return COMPLETED;
       delay(1000);
     }
+    error.log("CTRL", "waitForInProgress", "Door did not activate");
+    return REQUEST_FAILED;
   }
 
+  //Activates door, and waits for it to start moving
   int executeCommandOnDoor(const char * status){
     trace.log("CTRL", "Activating relay to open/close the door...");
   
     relay.onFor(1000);
 
     //We wait until the door is moving to report back to the backend.
-    waitForInProgress();
+    if(waitForInProgress() != COMPLETED){
+      return REQUEST_FAILED;
+    }
 
     if(!strcmp(status, "opening")){  
       return ACTIVATED_OPEN;
@@ -48,6 +59,29 @@ class Controller {
     return NO_ACTION;
   }
 
+  int sendDoorStatus(){
+
+    const char * status = door.getStateStr();
+    
+    HTTPRequest req(SERVER_URL, 443);
+   
+    sprintf(req.dataBuffer(), "{\"status\":\"%s\",\"controllerId\":\"%s\"}", status, CTRL_ID);
+    auto res = req.putJSON(DOOR_PATH, API_KEY);
+  
+    if(!res){
+      return INVALID_RESPONSE;
+    }
+  
+    if(res->statusCode == 200){
+      trace.log("CTRL", "sendDoorStatus. Door: ", status);
+      return NO_ACTION;
+    }
+  
+    error.log("CTRL", "sendDoorStatus. Error: ", res->statusCode);
+    return REQUEST_FAILED;
+  }
+
+
   /*
    * This function notifies the backend of the completion of a action
    */
@@ -60,10 +94,10 @@ class Controller {
       return INVALID_REQUEST;
     }
   
-    HTTPRequest req;
+    HTTPRequest req(SERVER_URL, 443);
    
     sprintf(req.dataBuffer(), "{\"status\":\"%s\",\"controllerId\":\"%s\"}", doorState == Door::OPEN ? "open_complete" : ( doorState == Door::CLOSED ? "close_complete" : "in_progress"), CTRL_ID);
-    auto res = req.postJSON(SERVER_URL, DOOR_PATH, 443, API_KEY, NULL);
+    auto res = req.postJSON(DOOR_PATH, API_KEY);
   
     if(!res){
       return INVALID_RESPONSE;
@@ -88,12 +122,12 @@ class Controller {
    * Checks for any pending actions. The 2 states we care are: OPENING and CLOSING
    */
   int getCommand(){
-    HTTPRequest req;
+    HTTPRequest req(SERVER_URL, 443);
   
     char apiPath[100];
     sprintf(apiPath, STATUS_PATH, CTRL_ID);
     trace.log("CTRL", "getCommand. Using path:", apiPath);
-    auto res = req.get(SERVER_URL, apiPath, 443, API_KEY, NULL);
+    auto res = req.get(apiPath, API_KEY);
     
     if(!res){
       error.log("CTRL", "getCommand", "Invalid response");
@@ -121,13 +155,19 @@ class Controller {
   }
 
 public:
-  Controller() : relay(RELAY_PIN), door(SENSOR_OPEN_PIN, SENSOR_CLOSE_PIN) {
+  Controller() : relay(RELAY_PIN), 
+                 door(SENSOR_OPEN_PIN, SENSOR_CLOSE_PIN)
+                 {
     state = WAITING;
   }
 
   void Init(){
     relay.Init();
     door.Init();
+
+    //During initialization we check the door state and report it back to the backend
+    //This is the "truth" 
+    sendDoorStatus();
   }
 
   /*
@@ -147,10 +187,12 @@ public:
       case WAITING:
       trace.log("Controller", "run", "Getting command");
       ret=getCommand();
+      
       if(ret==ACTIVATED_OPEN){
         trace.log("CTRL", "run", "Activating opening door");
         state=ACTIVATING_OPEN;
       }
+      
       if(ret==ACTIVATED_CLOSE){
         trace.log("CTRL", "run", "Activating closing door");
         state=ACTIVATING_CLOSE;

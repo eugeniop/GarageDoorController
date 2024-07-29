@@ -33,6 +33,6 @@ public:
   }
 };
 
-const char * Door::states[] = {"OPEN", "CLOSED", "MOVING", "INVALID"}; 
+const char * Door::states[] = {"open", "closed", "moving", "invalid"}; 
 
 #endif
