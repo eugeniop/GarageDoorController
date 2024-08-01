@@ -3,29 +3,37 @@
 
 class Door {
 
+public:
+  enum State { OPEN, CLOSED, OPENING, CLOSING, MOVING, INVALID };
+
+private:
   int openPin, closePin;
   static const char * states[];
+
+  State getCurrentState(){
+    int openSensor = digitalRead(openPin) == 0;   //Logic in pullup is reversed
+    int closeSensor = digitalRead(closePin) == 0;
+    if(openSensor && closeSensor) return INVALID;
+    if(openSensor) return OPEN;
+    if(closeSensor) return CLOSED;
+    
+    //Neither sensor is activated, it is MOVING
+    return MOVING;
+  }
   
 public:
-
-  enum State { OPEN, CLOSED, MOVING, INVALID };
 
   Door(int openPin, int closePin) : openPin(openPin), closePin(closePin){
   }
 
   void Init(){
     pinMode(closePin, INPUT_PULLUP);
-    pinMode(openPin, INPUT_PULLUP);  
+    pinMode(openPin, INPUT_PULLUP);
   }
 
   State getState(){
-    int openSensor = digitalRead(openPin) == 0;
-    int closeSensor = digitalRead(closePin) == 0;
-
-    if(openSensor && closeSensor) return INVALID;
-    if(openSensor) return OPEN;
-    if(closeSensor) return CLOSED;
-    return MOVING;
+    State now = getCurrentState();
+    return now;
   }
 
   const char * getStateStr(){
@@ -33,6 +41,6 @@ public:
   }
 };
 
-const char * Door::states[] = {"open", "closed", "moving", "invalid"}; 
+const char * Door::states[] = {"ctrl_open", "ctrl_closed", "ctrl_opening", "ctrl_closing", "ctrl_moving", "ctrl_invalid"}; 
 
 #endif
