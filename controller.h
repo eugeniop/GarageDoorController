@@ -7,9 +7,13 @@
 #include "Door.h"
 
 //Result of commands and actions
-typedef enum { NO_ACTION, INVALID_RESPONSE, INVALID_REQUEST, REQUEST_FAILED, ACTIVATED_OPEN, ACTIVATED_CLOSE, IN_PROGRESS, COMPLETED } COMMAND_RESULT;
+typedef enum { NO_ACTION, INVALID_RESPONSE, INVALID_REQUEST, REQUEST_FAILED, COMPLETED } COMMAND_RESULT;
 
 class Controller {
+
+  enum State { IDLE, ACTIVATING };
+
+  State state;
   
   Relay relay;
   Door door;
@@ -47,7 +51,7 @@ class Controller {
   
     if(res->statusCode == 200){
       trace.log("CTRL", "sendDoorStatus. Door: ", status);
-      return NO_ACTION;
+      return COMPLETED;
     }
   
     error.log("CTRL", "sendDoorStatus. Error: ", res->statusCode);
@@ -83,11 +87,15 @@ class Controller {
     
     const char* status = doc["status"];
 
+    trace.log("CTRL", "getServerDoorStatus. Status - ", status); 
+
     int x=0;
     while(serverStates[x]){
+      trace.log("CTRL", "getServerDoorStatus. States: ", serverStates[x]); 
       if(!strcmp(status, serverStates[x])){
         return x;
       }
+      x++;
     }
 
     return -1;
@@ -105,20 +113,63 @@ public:
     //During initialization we check the door state and report it back to the backend
     //This is the "truth" 
     sendDoorStatus();
+
+    //If the door is MOVING, then we need to wait until that is complete before we get commands
+    if(door.getState() == Door::MOVING){
+      state = ACTIVATING;
+    } else {
+      state = IDLE;
+    }
   }
 
   void Run(){
-    trace.log("CTRL", "Door Status:", door.getStateStr());
-    int ret = getServerDoorState();
-    if(ret == OPENING_REQUEST || ret == CLOSE_REQUEST){
-      relay.onFor(1000);    //Turn on motor
-      waitForActivation();  //Wait for the door to move
-    } else {
-      sendDoorStatus();     //Continue sending status
+    trace.log("CTRL", "Run. Door Status", door.getStateStr());
+    int ret;
+    
+    switch(state){
+      //If controller is in IDLE, we are waiting for either commands from the backend or the door moving on its own
+      //if the door is MOVING (on its own) we switch to ACTIVATING (waiting for completion)
+      //if the door is NOT MOVING, but there's a request to move from the backend, we activate the relay and go to ACTIVATING
+      //if neither, we just report state
+      case IDLE:
+        if(door.getState() == Door::MOVING){
+          trace.log("CTRL", "Run. Door is moving. Wait for completion");
+          state = ACTIVATING;
+          return;
+        }
+
+        ret = getServerDoorState();
+  
+        if(ret == OPENING_REQUEST || ret == CLOSE_REQUEST){
+          trace.log("CTRL", "Run. Received open or close request", ret);
+          relay.onFor(1000);    //Turn on motor
+          if(waitForActivation() == COMPLETED){
+            state = ACTIVATING;
+            return;
+          }
+        } else {
+          //The door is NOT moving on its own and there are no requests to open or close, synch status
+          sendDoorStatus();
+        }
+        break;
+
+      case ACTIVATING:
+        // The door is MOVING (on its own or by a command). We report back to the backend 
+        // the status. If the door is closed or open, we finished and we go back to IDLE.
+        if( sendDoorStatus() == COMPLETED ){
+          auto doorState = door.getState();
+          if(doorState == Door::OPEN || doorState == Door::CLOSED){
+            trace.log("CTRL", "Run. Operation completed", door.getStateStr());
+            state = IDLE;
+          }
+        }
+        break;
     }
   };
 };
 
+//These strings need to be in THE SAME order as the enum:
+//enum ServerStates { CLOSED, OPENING_REQUEST, OPENING, OPEN, CLOSE_REQUEST, CLOSING };
 const char * Controller::serverStates[] = { "closed", "opening_request", "opening", "open", "close_request", "closing", NULL };
 
 #endif
