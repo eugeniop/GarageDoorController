@@ -59,7 +59,7 @@ class Controller {
   };
 
   static const char * serverStates[];
-  enum ServerStates { CLOSED, OPENING_REQUEST, OPENING, OPEN, CLOSE_REQUEST, CLOSING };
+  enum ServerStates { CLOSED, OPENING_REQUEST, OPENING, OPEN, CLOSING_REQUEST, CLOSING };
 
   /*
    * Checks for any pending actions. The 2 states we care are: OPENING and CLOSING
@@ -91,7 +91,6 @@ class Controller {
 
     int x=0;
     while(serverStates[x]){
-      trace.log("CTRL", "getServerDoorStatus. States: ", serverStates[x]); 
       if(!strcmp(status, serverStates[x])){
         return x;
       }
@@ -125,6 +124,7 @@ public:
   void Run(){
     trace.log("CTRL", "Run. Door Status", door.getStateStr());
     int ret;
+    auto doorState = door.getState();
     
     switch(state){
       //If controller is in IDLE, we are waiting for either commands from the backend or the door moving on its own
@@ -132,7 +132,7 @@ public:
       //if the door is NOT MOVING, but there's a request to move from the backend, we activate the relay and go to ACTIVATING
       //if neither, we just report state
       case IDLE:
-        if(door.getState() == Door::MOVING){
+        if(doorState == Door::MOVING){
           trace.log("CTRL", "Run. Door is moving. Wait for completion");
           state = ACTIVATING;
           return;
@@ -140,7 +140,7 @@ public:
 
         ret = getServerDoorState();
   
-        if(ret == OPENING_REQUEST || ret == CLOSE_REQUEST){
+        if(ret == OPENING_REQUEST || ret == CLOSING_REQUEST){
           trace.log("CTRL", "Run. Received open or close request", ret);
           relay.onFor(1000);    //Turn on motor
           if(waitForActivation() == COMPLETED){
@@ -149,6 +149,10 @@ public:
           }
         } else {
           //The door is NOT moving on its own and there are no requests to open or close, synch status
+          if( (doorState == Door::OPEN && ret == OPEN) || doorState == Door::CLOSED && ret == CLOSED){
+            trace.log("CTRL", "Run. Backend and Door in synch");
+            return; //Nothing to report
+          }
           sendDoorStatus();
         }
         break;
@@ -169,7 +173,7 @@ public:
 };
 
 //These strings need to be in THE SAME order as the enum:
-//enum ServerStates { CLOSED, OPENING_REQUEST, OPENING, OPEN, CLOSE_REQUEST, CLOSING };
-const char * Controller::serverStates[] = { "closed", "opening_request", "opening", "open", "close_request", "closing", NULL };
+//enum ServerStates { CLOSED, OPENING_REQUEST, OPENING, OPEN, CLOSING_REQUEST, CLOSING };
+const char * Controller::serverStates[] = { "closed", "opening_request", "opening", "open", "closing_request", "closing", NULL };
 
 #endif
