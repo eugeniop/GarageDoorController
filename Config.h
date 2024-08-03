@@ -5,9 +5,8 @@
 #define SENSOR_CLOSE_PIN  5
 #define SENSOR_OPEN_PIN   6
 
-#define SERVER_URL  "garage-door-c2bec621cb00.herokuapp.com"
-//#define STATUS_PATH "/api/controller/command/%s"
-#define DOOR_PATH   "/api/door/USER-CTRL-1"
+#define SERVER_URL  "{REPLACE WITH SERVER URL}"
+#define DOOR_PATH   "/api/door/{REPLACE WITH CONTROLLER ID}"
 
 #include "secrets.h"
 
