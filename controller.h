@@ -140,7 +140,14 @@ public:
 
         ret = getServerDoorState();
   
-        if(ret == OPENING_REQUEST || ret == CLOSING_REQUEST){
+        if(ret == OPENING_REQUEST && doorState == Door::OPEN || 
+           ret == CLOSING_REQUEST && doorState == Door::CLOSED){
+          state = IDLE;
+          sendDoorStatus();
+          return; 
+        }
+
+        if(ret == OPENING_REQUEST || ret == CLOSING_REQUEST ){
           trace.log("CTRL", "Run. Received open or close request", ret);
           relay.onFor(1000);    //Turn on motor
           if(waitForActivation() == COMPLETED){

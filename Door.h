@@ -8,7 +8,7 @@ public:
 
 private:
   int openPin, closePin;
-  static const char * states[];
+  static const char * states[]; //Must follow the same order as the enum (see below)
 
   State getCurrentState(){
     int openSensor = digitalRead(openPin) == 0;   //Logic in pullup is reversed
@@ -41,6 +41,7 @@ public:
   }
 };
 
+//Must follow the same order as the enum
 const char * Door::states[] = {"ctrl_open", "ctrl_closed", "ctrl_opening", "ctrl_closing", "ctrl_moving", "ctrl_invalid"}; 
 
 #endif
